@@ -13,7 +13,6 @@ def find_arbitrage(df, total_budget):
 
     arbitrage_opportunities['Stake A'] = stake_a
     arbitrage_opportunities['Stake B'] = stake_b
-
     arbitrage_opportunities['Net_Profit'] = round(stake_a * odds_a - total_budget, 2)
 
     return arbitrage_opportunities
