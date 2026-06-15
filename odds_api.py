@@ -1,10 +1,33 @@
 import requests
 
-def fetch_odds(api_key, sport_key="basketball_nba"):
-    url = f"https://api.theoddsapi.com/odds/?apiKey={api_key}&sport_key={sport_key}"
+SPORT_KEYS = [
+    "basketball_nba",
+    "baseball_mlb",
+]
+
+def fetch_odds(api_key, sport_key=None):
+    all_data = []
+    url = f"https://api.theoddsapi.com/odds/?apiKey={api_key}"
+    
+    if sport_key:
+        url += f"&sport_key={sport_key}"
+    
     response = requests.get(url)
     data = response.json()
-    return data
+    
+    if data.get('success') and data.get('data'):
+        all_data.extend(data['data'])
+    return all_data
+
+def fetch_all_odds(api_key):
+    all_data = []
+    
+    for sport_key in SPORT_KEYS:
+        data = fetch_odds(api_key, sport_key)
+        print(f"{sport_key}: {len(data)} games fetched.")
+        all_data.extend(data)
+    
+    return all_data
 
 def american_to_decimal(odds):
     if odds > 0:
@@ -14,13 +37,17 @@ def american_to_decimal(odds):
 
 def get_best_odds(data):
     best_odds = {}
+    
     for book in data['books']:
         book_name = book['book']
+        
         if book['market'] == 'h2h':  # Only consider head-to-head markets
+            
             for name in book['outcomes']:
                 team = name['name']
                 odds = name['price']
                 decimal_odds = american_to_decimal(odds)
+                
                 if team not in best_odds or decimal_odds > best_odds[team][1]:
                     best_odds[team] = (book_name, decimal_odds)
                 
@@ -33,8 +60,7 @@ def check_arbitrage(best_odds):
 def find_arbitrage_from_api(data, total_budget) -> list:
     arbitrage_opportunities = []
 
-    games = data['data']
-    for game in games:
+    for game in data:
         best_odds = get_best_odds(game)
         teams = list(best_odds.keys())
         odds_a = best_odds[teams[0]][1]

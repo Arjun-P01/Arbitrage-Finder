@@ -1,7 +1,7 @@
 import streamlit as st
 from arbitrage import find_arbitrage
 import pandas as pd
-from odds_api import find_arbitrage_from_api, fetch_odds
+from odds_api import find_arbitrage_from_api, fetch_all_odds
 
 st.title("Arbitrage Finder")
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
@@ -25,12 +25,24 @@ total_budget = float(budget_input) if budget_input else 100  # Default to 100 if
 
 if st.button("Fetch Odds"):
     api_key = st.secrets["ODDS_API_KEY"]
+    
     if api_key:
-        odds_data = fetch_odds(api_key)
+        odds_data = fetch_all_odds(api_key)
         if odds_data:
             arb = find_arbitrage_from_api(odds_data, total_budget)
             st.success("Odds fetched successfully!")
-            st.json(odds_data)
-            st.json(arb)
+            
+            rows = []
+            for opportunity in arb:
+                for team, (book, odds) in opportunity['best_odds'].items():
+                    rows.append({
+                        "Team": team,
+                        "Bookmaker": book,
+                        "Odds": odds,
+                        "Stake": opportunity['stakes'][team],
+                        "Net Profit": round(opportunity['stakes'][team] * odds - total_budget, 2)
+                    })
+            st.table(rows)
+
         else:
             st.error("Failed to fetch odds.")
