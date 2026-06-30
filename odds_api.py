@@ -5,6 +5,15 @@ SPORT_KEYS = [
     "baseball_mlb",
 ]
 
+ALLOWED_BOOKS = {
+    "draftkings",
+    "fanduel",
+    "betmgm",
+    "betrivers",
+    "fanatics",
+    "williamhill_us",
+}
+
 def fetch_odds(api_key, sport_key=None):
     all_data = []
     url = f"https://api.theoddsapi.com/odds/?apiKey={api_key}"
@@ -40,7 +49,10 @@ def get_best_odds(data):
     
     for book in data['books']:
         book_name = book['book']
-        
+
+        if book_name not in ALLOWED_BOOKS:
+            continue
+
         if book['market'] == 'h2h':  # Only consider head-to-head markets
             
             for name in book['outcomes']:
@@ -71,6 +83,10 @@ def find_arbitrage_from_api(data, total_budget) -> list:
             stake_a = round(total_budget / (1 + odds_a/odds_b), 2)
             stake_b = round(total_budget / (1 + odds_b/odds_a), 2)
             arbitrage_opportunities.append({
+                "home_team": game['home_team'],
+                "away_team": game['away_team'],
+                "league": game['league'],
+                "start_time": game['start_time'],
                 "best_odds": best_odds,
                 "stakes": {teams[0]: stake_a, teams[1]: stake_b},
                 "total_inverse_odds": total_inverse_odds
