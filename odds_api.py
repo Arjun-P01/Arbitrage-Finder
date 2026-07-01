@@ -4,6 +4,7 @@ SPORT_KEYS = [
     "baseball_mlb",
     "basketball_nba",
     "soccer_usa_mls",
+    "soccer_fifa_world_cup",
 ]
 
 ALLOWED_BOOKS = {
