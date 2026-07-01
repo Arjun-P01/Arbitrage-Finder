@@ -7,12 +7,11 @@ SPORT_KEYS = [
 ]
 
 ALLOWED_BOOKS = {
-    "draftkings",
-    "fanduel",
-    "betmgm",
-    "betrivers",
-    "fanatics",
-    "williamhill_us",
+    "bovada",
+    "betonlineag",
+    "mybookieag",
+    "betus",
+    "lowvig",
 }
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports"
@@ -21,7 +20,7 @@ BASE_URL = "https://api.the-odds-api.com/v4/sports"
 def fetch_odds(api_key, sport_key):
     url = (
         f"{BASE_URL}/{sport_key}/odds/"
-        f"?apiKey={api_key}&regions=us&markets=h2h&oddsFormat=american"
+        f"?apiKey={api_key}&regions=us&markets=h2h,spreads,totals&oddsFormat=american"
     )
     response = requests.get(url)
     if response.status_code != 200:
@@ -44,47 +43,69 @@ def american_to_decimal(odds):
         return (100 / abs(odds)) + 1
 
 
-def get_best_odds(game):
-    best_odds = {}
+def find_market_arbitrage(game, market_key, total_budget):
+    """Find arbitrage for a specific market within one game."""
+    outcome_groups = {}
+
     for bookmaker in game.get("bookmakers", []):
         if bookmaker["key"] not in ALLOWED_BOOKS:
             continue
         for market in bookmaker.get("markets", []):
-            if market["key"] != "h2h":
+            if market["key"] != market_key:
                 continue
             for outcome in market["outcomes"]:
-                team = outcome["name"]
-                decimal_odds = american_to_decimal(outcome["price"])
-                if team not in best_odds or decimal_odds > best_odds[team][1]:
-                    best_odds[team] = (bookmaker["key"], decimal_odds)
-    return best_odds
+                name = outcome["name"]
+                odds = american_to_decimal(outcome["price"])
 
+                if market_key == "h2h":
+                    group_key = "main"
+                elif market_key == "totals":
+                    group_key = outcome.get("point")
+                elif market_key == "spreads":
+                    group_key = abs(outcome.get("point", 0))
 
-def check_arbitrage(best_odds):
-    total_inverse_odds = sum(1 / odds[1] for odds in best_odds.values())
-    return total_inverse_odds < 1, total_inverse_odds
+                if group_key not in outcome_groups:
+                    outcome_groups[group_key] = {}
+                if name not in outcome_groups[group_key] or odds > outcome_groups[group_key][name][1]:
+                    outcome_groups[group_key][name] = (bookmaker["key"], odds)
 
-
-def find_arbitrage_from_api(data, total_budget):
-    arbitrage_opportunities = []
-    for game in data:
-        best_odds = get_best_odds(game)
+    opportunities = []
+    for group_key, best_odds in outcome_groups.items():
         if len(best_odds) < 2:
             continue
-        teams = list(best_odds.keys())
-        odds_a = best_odds[teams[0]][1]
-        odds_b = best_odds[teams[1]][1]
-        is_arbitrage, total_inverse_odds = check_arbitrage(best_odds)
-        if is_arbitrage:
+        outcomes = list(best_odds.keys())
+        odds_a = best_odds[outcomes[0]][1]
+        odds_b = best_odds[outcomes[1]][1]
+        total_inverse = sum(1 / v[1] for v in best_odds.values())
+
+        if total_inverse < 1:
             stake_a = round(total_budget / (1 + odds_a / odds_b), 2)
             stake_b = round(total_budget / (1 + odds_b / odds_a), 2)
-            arbitrage_opportunities.append({
+
+            if market_key == "h2h":
+                market_label = "Moneyline"
+            elif market_key == "totals":
+                market_label = f"Total O/U {group_key}"
+            else:
+                market_label = f"Spread ±{group_key}"
+
+            opportunities.append({
                 "home_team": game["home_team"],
                 "away_team": game["away_team"],
                 "league": game.get("sport_title", ""),
                 "start_time": game.get("commence_time", ""),
+                "market": market_label,
                 "best_odds": best_odds,
-                "stakes": {teams[0]: stake_a, teams[1]: stake_b},
-                "total_inverse_odds": total_inverse_odds,
+                "stakes": {outcomes[0]: stake_a, outcomes[1]: stake_b},
+                "total_inverse_odds": total_inverse,
             })
-    return arbitrage_opportunities
+    return opportunities
+
+
+def find_arbitrage_from_api(data, total_budget):
+    all_opportunities = []
+    for game in data:
+        for market_key in ["h2h", "totals", "spreads"]:
+            opps = find_market_arbitrage(game, market_key, total_budget)
+            all_opportunities.extend(opps)
+    return all_opportunities

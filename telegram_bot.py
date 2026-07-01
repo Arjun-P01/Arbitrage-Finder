@@ -37,10 +37,12 @@ def send_alert(opportunity, total_budget):
     home = opportunity.get('home_team', team_a)
     away = opportunity.get('away_team', team_b)
     league = opportunity.get('league', '')
+    market = opportunity.get('market', 'Moneyline')
 
     message = (
         f"⚡ <b>Arbitrage Opportunity</b>\n\n"
-        f"🏆 {league}: {away} @ {home}\n\n"
+        f"🏆 {league}: {away} @ {home}\n"
+        f"📋 Market: {market}\n\n"
         f"Bet 1: <b>{team_a}</b>\n"
         f"  Book: {get_book_link(book_a)}\n"
         f"  Odds: {round(odds_a, 3)}\n"
