@@ -63,4 +63,19 @@ def send_alert(opportunity, total_budget):
             "parse_mode": "HTML",
         }
     )
-    return response.ok
+    if response.ok:
+        return response.json()["result"]["message_id"], message
+    return None, message
+
+
+def mark_gone(message_id, original_text):
+    gone_text = "🔴 <b>GONE</b>\n\n" + original_text
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText",
+        json={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "message_id": message_id,
+            "text": gone_text,
+            "parse_mode": "HTML",
+        }
+    )

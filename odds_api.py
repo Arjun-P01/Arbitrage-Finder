@@ -43,8 +43,8 @@ def american_to_decimal(odds):
         return (100 / abs(odds)) + 1
 
 
-def find_market_arbitrage(game, market_key, total_budget):
-    """Find arbitrage for a specific market within one game."""
+def find_h2h_totals_arbitrage(game, market_key, total_budget):
+    """Find arb for h2h or totals — both have two genuinely opposite outcomes."""
     outcome_groups = {}
 
     for bookmaker in game.get("bookmakers", []):
@@ -56,13 +56,7 @@ def find_market_arbitrage(game, market_key, total_budget):
             for outcome in market["outcomes"]:
                 name = outcome["name"]
                 odds = american_to_decimal(outcome["price"])
-
-                if market_key == "h2h":
-                    group_key = "main"
-                elif market_key == "totals":
-                    group_key = outcome.get("point")
-                elif market_key == "spreads":
-                    group_key = abs(outcome.get("point", 0))
+                group_key = "main" if market_key == "h2h" else outcome.get("point")
 
                 if group_key not in outcome_groups:
                     outcome_groups[group_key] = {}
@@ -74,29 +68,78 @@ def find_market_arbitrage(game, market_key, total_budget):
         if len(best_odds) < 2:
             continue
         outcomes = list(best_odds.keys())
-        odds_a = best_odds[outcomes[0]][1]
-        odds_b = best_odds[outcomes[1]][1]
+        odds_a, odds_b = best_odds[outcomes[0]][1], best_odds[outcomes[1]][1]
         total_inverse = sum(1 / v[1] for v in best_odds.values())
 
         if total_inverse < 1:
-            stake_a = round(total_budget / (1 + odds_a / odds_b), 2)
-            stake_b = round(total_budget / (1 + odds_b / odds_a), 2)
-
-            if market_key == "h2h":
-                market_label = "Moneyline"
-            elif market_key == "totals":
-                market_label = f"Total O/U {group_key}"
-            else:
-                market_label = f"Spread ±{group_key}"
-
+            label = "Moneyline" if market_key == "h2h" else f"Total O/U {group_key}"
             opportunities.append({
                 "home_team": game["home_team"],
                 "away_team": game["away_team"],
                 "league": game.get("sport_title", ""),
                 "start_time": game.get("commence_time", ""),
-                "market": market_label,
+                "market": label,
                 "best_odds": best_odds,
-                "stakes": {outcomes[0]: stake_a, outcomes[1]: stake_b},
+                "stakes": {
+                    outcomes[0]: round(total_budget / (1 + odds_a / odds_b), 2),
+                    outcomes[1]: round(total_budget / (1 + odds_b / odds_a), 2),
+                },
+                "total_inverse_odds": total_inverse,
+            })
+    return opportunities
+
+
+def find_spread_arbitrage(game, total_budget):
+    """Find arb for spreads — must pair the SAME team at +X vs -X across books."""
+    # (team, abs_line) -> {'+': (book, odds), '-': (book, odds)}
+    spread_groups = {}
+
+    for bookmaker in game.get("bookmakers", []):
+        if bookmaker["key"] not in ALLOWED_BOOKS:
+            continue
+        for market in bookmaker.get("markets", []):
+            if market["key"] != "spreads":
+                continue
+            for outcome in market["outcomes"]:
+                name = outcome["name"]
+                point = outcome.get("point", 0)
+                abs_point = abs(point)
+                odds = american_to_decimal(outcome["price"])
+                side = "+" if point > 0 else "-"
+                key = (name, abs_point)
+
+                if key not in spread_groups:
+                    spread_groups[key] = {}
+                if side not in spread_groups[key] or odds > spread_groups[key][side][1]:
+                    spread_groups[key][side] = (bookmaker["key"], odds)
+
+    opportunities = []
+    for (team, abs_point), sides in spread_groups.items():
+        if "+" not in sides or "-" not in sides:
+            continue
+        book_plus, odds_plus = sides["+"]
+        book_minus, odds_minus = sides["-"]
+        if book_plus == book_minus:
+            continue
+        total_inverse = 1 / odds_plus + 1 / odds_minus
+
+        if total_inverse < 1:
+            name_plus = f"{team} +{abs_point}"
+            name_minus = f"{team} -{abs_point}"
+            opportunities.append({
+                "home_team": game["home_team"],
+                "away_team": game["away_team"],
+                "league": game.get("sport_title", ""),
+                "start_time": game.get("commence_time", ""),
+                "market": f"Spread {team} ±{abs_point}",
+                "best_odds": {
+                    name_plus: (book_plus, odds_plus),
+                    name_minus: (book_minus, odds_minus),
+                },
+                "stakes": {
+                    name_plus: round(total_budget / (1 + odds_plus / odds_minus), 2),
+                    name_minus: round(total_budget / (1 + odds_minus / odds_plus), 2),
+                },
                 "total_inverse_odds": total_inverse,
             })
     return opportunities
@@ -105,7 +148,7 @@ def find_market_arbitrage(game, market_key, total_budget):
 def find_arbitrage_from_api(data, total_budget):
     all_opportunities = []
     for game in data:
-        for market_key in ["h2h", "totals", "spreads"]:
-            opps = find_market_arbitrage(game, market_key, total_budget)
-            all_opportunities.extend(opps)
+        all_opportunities.extend(find_h2h_totals_arbitrage(game, "h2h", total_budget))
+        all_opportunities.extend(find_h2h_totals_arbitrage(game, "totals", total_budget))
+        all_opportunities.extend(find_spread_arbitrage(game, total_budget))
     return all_opportunities
