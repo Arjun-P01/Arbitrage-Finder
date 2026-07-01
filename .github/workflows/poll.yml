@@ -2,10 +2,10 @@ name: Arbitrage Poller
 
 on:
   schedule:
-    # 9am-11:59pm Eastern (EDT, UTC-4)
-    - cron: '0,20,40 13-23 * * *'
-    # 12am-2:59am Eastern (covers up to 11pm EDT boundary)
-    - cron: '0,20,40 0-2 * * *'
+    # Once per hour, 9am-11pm Eastern (EDT, UTC-4)
+    - cron: '0 13-23 * * *'
+    # 12am-2am Eastern
+    - cron: '0 0-2 * * *'
   workflow_dispatch:
 
 jobs:
