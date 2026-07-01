@@ -146,8 +146,13 @@ def find_spread_arbitrage(game, total_budget):
 
 
 def find_arbitrage_from_api(data, total_budget):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
     all_opportunities = []
     for game in data:
+        start = game.get("commence_time", "")
+        if start and datetime.fromisoformat(start.replace("Z", "+00:00")) < now:
+            continue  # skip live/in-progress games
         all_opportunities.extend(find_h2h_totals_arbitrage(game, "h2h", total_budget))
         all_opportunities.extend(find_h2h_totals_arbitrage(game, "totals", total_budget))
         all_opportunities.extend(find_spread_arbitrage(game, total_budget))
