@@ -4,8 +4,8 @@ on:
   schedule:
     # Once per hour, 9am-11pm Eastern (EDT, UTC-4)
     - cron: '0 13-23 * * *'
-    # 12am-2am Eastern
-    - cron: '0 0-2 * * *'
+    # 12am-3am Eastern (covers to 11pm EDT)
+    - cron: '0 0-3 * * *'
   workflow_dispatch:
 
 jobs:

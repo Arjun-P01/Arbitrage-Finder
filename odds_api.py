@@ -68,12 +68,14 @@ def find_h2h_totals_arbitrage(game, market_key, total_budget):
     for group_key, best_odds in outcome_groups.items():
         if len(best_odds) < 2:
             continue
-        outcomes = list(best_odds.keys())
-        odds_a, odds_b = best_odds[outcomes[0]][1], best_odds[outcomes[1]][1]
         total_inverse = sum(1 / v[1] for v in best_odds.values())
 
         if total_inverse < 1:
             label = "Moneyline" if market_key == "h2h" else f"Total O/U {group_key}"
+            stakes = {
+                name: round(total_budget * (1 / odds[1]) / total_inverse, 2)
+                for name, odds in best_odds.items()
+            }
             opportunities.append({
                 "home_team": game["home_team"],
                 "away_team": game["away_team"],
@@ -81,10 +83,7 @@ def find_h2h_totals_arbitrage(game, market_key, total_budget):
                 "start_time": game.get("commence_time", ""),
                 "market": label,
                 "best_odds": best_odds,
-                "stakes": {
-                    outcomes[0]: round(total_budget / (1 + odds_a / odds_b), 2),
-                    outcomes[1]: round(total_budget / (1 + odds_b / odds_a), 2),
-                },
+                "stakes": stakes,
                 "total_inverse_odds": total_inverse,
             })
     return opportunities
